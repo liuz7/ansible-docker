@@ -1,0 +1,72 @@
+---
+
+- name: ensure config directory
+  file: 
+    path: "{{ docker_config_dir }}"
+    state: directory
+
+- name: ensure required packages
+  yum:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - yum-utils
+    - device-mapper-persistent-data
+    - lvm2
+    
+- name: add docker ce repo
+  shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+  args:
+    creates: /etc/yum.repos.d/docker-ce.repo
+  register: docker_yum_repo
+  
+- name: make yum cache fast
+  shell: yum makecache fast
+  when: docker_yum_repo.changed
+  
+- name: install docker ce
+  yum:
+    name: "docker-ce-{{ docker_version }}"
+    state: present
+  notify: restart docker
+  
+- name: copy dockerd daemon.json
+  template: 
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+  notify: restart docker
+  
+- name: create docker container
+  docker_container:
+    name: mycontainer
+    image: nginx
+    state: started
+    ports:
+    - "80:80"
+
+- name: check the health of nginx container
+  uri:
+    url: http://localhost:80
+    method: GET
+    return_content: yes
+    status_code: 200
+  register: html_content
+
+- debug: msg="{{ html_content.content }}"
+
+- copy:
+    content: "{{ html_content.content }}"
+    dest: "/tmp/file"
+
+- name: do word count
+  shell: sed -e 's/<[^>]*>//g' /tmp/file | tr '\n' " " |  tr -s " " | tr " " '\n'| tr 'A-Z' 'a-z' | sort | uniq -c
+  register: result
+
+- debug: msg="{{ result.stdout }}"
+
+- name: log container stats
+  shell: while true; do sudo docker stats -a --no-stream >> /tmp/stats.txt; sleep 10; done
+
+
+
+

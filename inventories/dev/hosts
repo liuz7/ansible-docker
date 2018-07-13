@@ -1,0 +1,7 @@
+#vm1 ansible_connection=local
+
+[docker]
+#vm1
+#vm2
+#vm3
+yp-ee-crystal-jenkinsmaster-test04
